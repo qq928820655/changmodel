@@ -15,6 +15,7 @@
                   "lib/client.js",
                   "lib/subagent-policy.mjs",
                   "scripts/input-history-patch.mjs",
+                  "scripts/subagent-dispatch-patch.mjs",
                   "scripts/smoke.mjs",
                   "scripts/subagent-policy.test.mjs",
                   "cordis.patch.yml",

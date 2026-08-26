@@ -24,7 +24,7 @@ Examples:
 
 ## Settings
 
-The `changmodel` settings page provides:
+The `changModel` settings page provides:
 
 - Provider-scoped model search, add, edit, and delete.
 - Context window, maximum output tokens, text/image capability, and custom reasoning levels.
@@ -53,4 +53,4 @@ Compaction remains optional. A Harness that does not expose an active compaction
 
 Install this package using the DeepSeek Harness plugin mechanism. The package declares a web client bundle and a profile bundle patch.
 
-After installation, restart the Harness. Use the `changmodel` settings page to configure optional features for that specific machine.
+After installation, restart the Harness. Use the `changModel` settings page to configure optional features for that specific machine.
