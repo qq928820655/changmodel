@@ -1,0 +1,5 @@
+﻿# changmodel bundle patch: mount the /cmodel host plugin.
+- insert:
+    - id: changmodel
+      name: changmodel
+
