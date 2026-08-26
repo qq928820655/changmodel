@@ -16,7 +16,20 @@ const backup = `${target}.changmodel.bak`;
 const marker = '/* changmodel-subagent-policy */';
 const hash = (text) => createHash('sha256').update(text).digest('hex');
 const statePath = `${target}.changmodel.json`;
-const status = () => ({ target, patched: readFileSync(target, 'utf8').includes(marker), backupExists: existsSync(backup), hash: hash(readFileSync(target, 'utf8')) });
+const status = () => {
+  const source = readFileSync(target, 'utf8');
+  const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : null;
+  const patched = source.includes(marker);
+  return {
+    target,
+    patched,
+    backupExists: existsSync(backup),
+    hash: hash(source),
+    compatible: source.includes('const request = {') && source.includes('ctx.subagents.start('),
+    changedAfterPatch: Boolean(state?.patchedHash && state.patchedHash !== hash(source)),
+    state,
+  };
+};
 const apply = () => {
   let source = readFileSync(target, 'utf8');
   if (source.includes(marker)) return status();
@@ -31,6 +44,13 @@ const apply = () => {
   writeFileSync(statePath, JSON.stringify({ originalHash: hash(readFileSync(backup, 'utf8')), patchedHash: hash(source) }, null, 2));
   return status();
 };
-const restore = () => { if (!existsSync(backup)) throw new Error('backup is missing'); copyFileSync(backup, target); return status(); };
+const restore = () => {
+  if (!existsSync(backup)) throw new Error('backup is missing');
+  const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : null;
+  const current = readFileSync(target, 'utf8');
+  if (!current.includes(marker) || state?.patchedHash !== hash(current)) throw new Error('refusing to restore: target changed after the managed patch; inspect manually');
+  copyFileSync(backup, target);
+  return status();
+};
 const action = process.argv[2] || 'status';
 process.stdout.write(`${JSON.stringify(action === 'apply' ? apply() : action === 'restore' ? restore() : status())}\n`);
