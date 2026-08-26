@@ -3,6 +3,8 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 
+const fail = (message) => { throw new Error(`changmodel input-history: ${message}`); };
+
 function discoverTarget() {
   if (process.env.DSH_INPUT_COMPONENT) return process.env.DSH_INPUT_COMPONENT;
   const require = createRequire(import.meta.url);
@@ -21,7 +23,6 @@ const stateFile = join(dirname(target), 'client.js.changmodel-input-history.json
 const marker = '/* changmodel-input-history */';
 
 const digest = (text) => createHash('sha256').update(text).digest('hex');
-const fail = (message) => { throw new Error(`changmodel input-history: ${message}`); };
 const once = (text, needle, label) => {
   const first = text.indexOf(needle);
   if (first < 0 || text.indexOf(needle, first + needle.length) >= 0) fail(`${label} anchor is missing or ambiguous`);
@@ -55,7 +56,7 @@ function apply() {
 
   const keydownAt = source.indexOf('const onKeyDown = (e) => {', workspaceAt);
   if (keydownAt < 0 || keydownAt - workspaceAt > 12000) fail('Composer keydown anchor is missing or ambiguous');
-  const navigator = `\t\t\t\tconst navigateInputHistory = async (direction) => {\n\t\t\t\t\tif (history === void 0 || keyboard === void 0 || draft.trim() !== "" || attachments.length !== 0) return false;\n\t\t\t\t\tconst state = historyRef.current;\n\t\t\t\t\tif (state.loading) return true;\n\t\t\t\t\tstate.loading = true;\n\t\t\t\t\ttry {\n\t\t\t\t\t\tif (state.entries === null) {\n\t\t\t\t\t\t\tconst result = await history();\n\t\t\t\t\t\t\tif (result?.ok !== true) return false;\n\t\t\t\t\t\t\tstate.entries = result.value.events.filter((entry) => entry.event.type === "user/message").map((entry) => entry.event.data.content.filter((block) => block.type === "text").map((block) => block.text).join("\\n").trim()).filter((text) => text.length > 0).reverse();\n\t\t\t\t\t\t\tstate.cursor = -1;\n\t\t\t\t\t\t\tstate.draft = draft;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tif (direction < 0 && state.cursor < state.entries.length - 1) state.cursor += 1;\n\t\t\t\t\t\telse if (direction > 0 && state.cursor >= 0) state.cursor -= 1;\n\t\t\t\t\t\telse return true;\n\t\t\t\t\t\tkeyboard.setDraft(state.cursor < 0 ? state.draft : state.entries[state.cursor]);\n\t\t\t\t\t\treturn true;\n\t\t\t\t\t} finally { state.loading = false; }\n\t\t\t\t};\n`;
+  const navigator = `\t\t\t\tconst navigateInputHistory = async (direction) => {\n\t\t\t\t\tconst state = historyRef.current;\n\t\t\t\t\tif (history === void 0 || keyboard === void 0 || attachments.length !== 0 || (state.cursor < 0 && draft.trim() !== "")) return false;\n\t\t\t\t\tif (state.loading) return true;\n\t\t\t\t\tstate.loading = true;\n\t\t\t\t\ttry {\n\t\t\t\t\t\tif (state.entries === null) {\n\t\t\t\t\t\t\tconst response = await history();\n\t\t\t\t\t\t\tconst result = response?.result;\n\t\t\t\t\t\t\tif (result?.ok !== true) return false;\n\t\t\t\t\t\t\tstate.entries = result.value.events.filter((entry) => entry.event.type === "user/message").map((entry) => entry.event.data.content.filter((block) => block.type === "text").map((block) => block.text).join("\\n").trim()).filter((text) => text.length > 0).reverse();\n\t\t\t\t\t\t\tstate.cursor = -1;\n\t\t\t\t\t\t\tstate.draft = draft;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tif (direction < 0 && state.cursor < state.entries.length - 1) state.cursor += 1;\n\t\t\t\t\t\telse if (direction > 0 && state.cursor >= 0) state.cursor -= 1;\n\t\t\t\t\t\telse return true;\n\t\t\t\t\t\tkeyboard.setDraft(state.cursor < 0 ? state.draft : state.entries[state.cursor]);\n\t\t\t\t\t\treturn true;\n\t\t\t\t\t} finally { state.loading = false; }\n\t\t\t\t};\n`;
   source = source.slice(0, keydownAt) + navigator + source.slice(keydownAt);
 
   const arrowAnchor = 'if (keyboard.arbitrate(e.key === "ArrowUp" ? "up" : "down", composing) === "consumed") e.preventDefault();';
