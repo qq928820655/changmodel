@@ -31,6 +31,10 @@ The `changmodel` settings page provides:
 - Models.dev capability lookup with editable bulk application to matching saved models.
 - A fixed summary model selection for context compaction when the target Harness supports compaction.
 - Optional input-history recall patch controls.
+- Subagent role policies with exact, alias, keyword, and priority matching.
+- Unmatched-role fallback to a configured subagent default, the parent session model, or deny dispatch.
+- Role-level provider, model, reasoning effort, context window, maximum output, and image capability settings.
+- Subagent configuration is persisted under `llm-pi-ai.changmodelSubagents`; the optional dispatch adapter applies matching rules when the target Harness exposes a pre-dispatch hook.
 
 All model capability changes write to the target Harness's own `llm-pi-ai` settings. No provider credentials, API keys, sessions, or model configuration are bundled in this plugin.
 

@@ -13,16 +13,18 @@
     "files":  [
                   "lib/index.js",
                   "lib/client.js",
+                  "lib/subagent-policy.mjs",
                   "scripts/input-history-patch.mjs",
                   "scripts/smoke.mjs",
+                  "scripts/subagent-policy.test.mjs",
                   "cordis.patch.yml",
                   "README.md",
                   "LICENSE"
               ],
     "scripts":  {
-                    "check":  "node --check lib/index.js",
-                    "smoke":  "node scripts/smoke.mjs",
-                    "test":  "node --check lib/index.js \u0026\u0026 node scripts/smoke.mjs"
+                    "check":  "node --check lib/index.js && node --check lib/subagent-policy.mjs",
+                    "smoke":  "node scripts/smoke.mjs && node scripts/subagent-policy.test.mjs",
+                    "test":  "node --check lib/index.js && node --check lib/subagent-policy.mjs && node scripts/smoke.mjs && node scripts/subagent-policy.test.mjs"
                 },
     "engines":  {
                     "node":  "\u003e=18"
