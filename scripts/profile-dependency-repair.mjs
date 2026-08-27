@@ -20,7 +20,8 @@ function readState() {
   const packageJson = packageText ? JSON.parse(packageText) : null;
   const dependencies = packageJson?.dependencies || {};
   const staleSessionManager = lockText.includes('dsh-session-manager') && !Object.prototype.hasOwnProperty.call(dependencies, 'dsh-session-manager');
-  const missingIntegrity = /resolution:\s*\{(?![^}\n]*\bintegrity:)/m.test(lockText);
+  const missingIntegrity = [...lockText.matchAll(/^\s{2}[^\n]+:\n\s{4}resolution: \{([^\n]*)\}/gm)]
+    .some((match) => /(?:codeload\.github\.com|github\.com|tarball:)/i.test(match[1]) && !/\bintegrity:/i.test(match[1]));
   return {
     profile,
     packageFile,
