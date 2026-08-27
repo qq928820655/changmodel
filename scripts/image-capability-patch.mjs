@@ -1,16 +1,21 @@
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const locate = () => {
   if (process.env.DSH_IMAGE_CAPABILITY) return process.env.DSH_IMAGE_CAPABILITY;
   try { return require.resolve('@linxin666/dsh-tool-describe-image/lib/types/model-capability.js'); } catch {}
-  const candidates = [
-    resolve(dirname(process.execPath), '..', '..', '@linxin666', 'dsh-tool-describe-image', 'lib', 'types', 'model-capability.js'),
-    resolve(dirname(process.execPath), '..', '..', 'resources', 'app', 'node_modules', '@linxin666', 'dsh-tool-describe-image', 'lib', 'types', 'model-capability.js'),
-  ];
+  const candidates = [];
+  let current = resolve(dirname(process.execPath));
+  for (let depth = 0; depth < 8; depth += 1) {
+    candidates.push(join(current, 'node_modules', '@linxin666', 'dsh-tool-describe-image', 'lib', 'types', 'model-capability.js'));
+    candidates.push(join(current, 'resources', 'app', 'node_modules', '@linxin666', 'dsh-tool-describe-image', 'lib', 'types', 'model-capability.js'));
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
   const target = candidates.find((value) => existsSync(value));
   if (target) return target;
   throw new Error('cannot locate describe-image model-capability.js; set DSH_IMAGE_CAPABILITY to the loaded file');
