@@ -34,6 +34,7 @@ The `changModel` settings page provides:
 - Subagent role policies with exact, alias, keyword, and priority matching.
 - Unmatched-role fallback to a configured subagent default, the parent session model, or deny dispatch.
 - Role-level provider, model, reasoning effort, context window, maximum output, and image capability settings.
+- Provider-default and model-level API protocol selection for OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages.
 - Subagent configuration is persisted under `llm-pi-ai.changmodelSubagents`; the optional dispatch adapter applies matching rules when the target Harness exposes a pre-dispatch hook.
 
 All model capability changes write to the target Harness's own `llm-pi-ai` settings. No provider credentials, API keys, sessions, or model configuration are bundled in this plugin.
@@ -48,6 +49,8 @@ Input-history recall patches the installed `dsh-client-ui-conversation` only aft
 - supports status checks and restoration.
 
 Compaction remains optional. A Harness that does not expose an active compaction service continues to support model switching and settings management.
+
+Model-level protocol overrides are enabled through a managed compatibility patch. The page checks the installed `llm-pi-ai` structure before applying it, stores a hash-protected backup, refuses incompatible upgrades, and can restore the original file. Enabling or restoring this patch requires a Harness restart. Only protocol adapters provided by the installed Harness are accepted; arbitrary request formats are not inferred.
 
 ## Installation
 
