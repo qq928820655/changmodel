@@ -2,14 +2,19 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const locate = () => {
   if (process.env.DSH_SUBAGENT_TOOL) return process.env.DSH_SUBAGENT_TOOL;
   try { return require.resolve('@deepseek-ai/dsh-tool-subagent/lib/index.js'); } catch {}
-  const candidate = resolve(dirname(process.execPath), '..', '..', '@deepseek-ai', 'dsh-tool-subagent', 'lib', 'index.js');
-  if (existsSync(candidate)) return candidate;
-  throw new Error('cannot locate dsh-tool-subagent');
+  const candidates = [
+    resolve(dirname(process.execPath), '..', '..', '@deepseek-ai', 'dsh-tool-subagent', 'lib', 'index.js'),
+    resolve(fileURLToPath(new URL('../../../resources/app/node_modules/@deepseek-ai/dsh-tool-subagent/lib/index.js', import.meta.url))),
+  ];
+  const candidate = candidates.find((value) => existsSync(value));
+  if (candidate) return candidate;
+  throw new Error('cannot locate dsh-tool-subagent; set DSH_SUBAGENT_TOOL to the loaded lib/index.js path');
 };
 const target = locate();
 const backup = `${target}.changmodel.bak`;
@@ -33,10 +38,22 @@ const status = () => {
 const apply = () => {
   let source = readFileSync(target, 'utf8');
   if (source.includes(marker)) return status();
-  const anchor = 'const request = {\n\t\t\t\t\t\tlabel: args.description,';
-  const at = source.indexOf(anchor);
-  if (at < 0 || source.indexOf(anchor, at + anchor.length) >= 0) throw new Error('subagent request anchor is missing or ambiguous');
-  const insert = `\t\t\t\t\t\t${marker}\n\t\t\t\t\t\tconst policy = ctx.reflect.get("settings", false)?.get("llm-pi-ai")?.changmodelSubagents;\n\t\t\t\t\t\tconst parentSelection = parent.options?.provider && parent.options?.model ? { provider: parent.options.provider, model: parent.options.model } : {};\n\t\t\t\t\t\tconst roleText = String(args.description || "") + " " + String(args.prompt || "");\n\t\t\t\t\t\tconst normalize = (value) => String(value || "").trim().toLowerCase();\n\t\t\t\t\t\tconst rules = Array.isArray(policy?.roles) ? policy.roles : [];\n\t\t\t\t\t\tconst ranked = rules.map((rule) => { const haystack = normalize(roleText); const names = [rule.name, ...(rule.aliases || [])].map(normalize); const keywords = (rule.keywords || []).map(normalize); let score = names.includes(normalize(args.description)) ? 100 : 0; for (const keyword of keywords) if (haystack.includes(keyword)) score += 10; return { rule, score: score + Number(rule.priority || 0) }; }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score);\n\t\t\t\t\t\tconst selected = ranked[0]?.rule?.selection || (policy?.fallback === "inherit" ? parentSelection : policy?.fallback === "deny" ? null : policy?.defaultSelection);\n\t\t\t\t\t\tif (policy?.fallback === "deny" && !ranked.length) throw new Error("changmodel: no subagent role matched this dispatch");\n\t\t\t\t\t\tconst policyAgentOptions = selected ? { provider: selected.provider, model: selected.model, ...(selected.maxTokens ? { maxTokens: selected.maxTokens } : {}), ...(selected.reasoningEffort && selected.reasoningEffort !== "default" ? { reasoningEffort: selected.reasoningEffort } : {}) } : {};\n`;
+  const anchorPattern = /const request = \{\s*label: args\.description,/g;
+  const matches = [...source.matchAll(anchorPattern)];
+  if (matches.length !== 1) throw new Error(`subagent request anchor is ${matches.length === 0 ? 'missing' : 'ambiguous'} in the loaded Harness version`);
+  const at = matches[0].index;
+  const indent = source.slice(0, at).match(/(^|\n)([ \t]*)[^\n]*$/)?.[2] || '';
+  const insert = `${indent}${marker}
+${indent}const policy = ctx.reflect.get("settings", false)?.get("llm-pi-ai")?.changmodelSubagents;
+${indent}const parentSelection = parent.options?.provider && parent.options?.model ? { provider: parent.options.provider, model: parent.options.model } : {};
+${indent}const roleText = String(args.description || "") + " " + String(args.prompt || "");
+${indent}const normalize = (value) => String(value || "").trim().toLowerCase();
+${indent}const rules = Array.isArray(policy?.roles) ? policy.roles : [];
+${indent}const ranked = rules.map((rule) => { const haystack = normalize(roleText); const names = [rule.name, ...(rule.aliases || [])].map(normalize); const keywords = (rule.keywords || []).map(normalize); let score = names.includes(normalize(args.description)) ? 100 : 0; for (const keyword of keywords) if (haystack.includes(keyword)) score += 10; return { rule, score: score + Number(rule.priority || 0) }; }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score);
+${indent}const selected = ranked[0]?.rule?.selection || (policy?.fallback === "inherit" ? parentSelection : policy?.fallback === "deny" ? null : policy?.defaultSelection);
+${indent}if (policy?.fallback === "deny" && !ranked.length) throw new Error("changmodel: no subagent role matched this dispatch");
+${indent}const policyAgentOptions = selected ? { provider: selected.provider, model: selected.model, ...(selected.maxTokens ? { maxTokens: selected.maxTokens } : {}), ...(selected.reasoningEffort && selected.reasoningEffort !== "default" ? { reasoningEffort: selected.reasoningEffort } : {}) } : {};
+`;
   source = source.slice(0, at) + insert + source.slice(at);
   if (!existsSync(backup)) copyFileSync(target, backup);
   source = source.replace('...config.agentOptions !== void 0 ? { agentOptions: config.agentOptions } : {},', '...config.agentOptions !== void 0 ? { agentOptions: config.agentOptions } : {},\n\t\t\t\t\t\t...Object.keys(policyAgentOptions).length > 0 ? { agentOptions: { ...config.agentOptions, ...policyAgentOptions } } : {},');
