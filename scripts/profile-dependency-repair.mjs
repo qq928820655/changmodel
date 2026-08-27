@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
+const CHANGE_MODEL_RE = /(^\s{2}changmodel@[^\n]+:\n\s{4}resolution: \{)([^\n]*)(\n\s{4}version: [^\n]+)/m;
 const profile = process.env.DSH_PROFILE_DIR
   ? resolve(process.env.DSH_PROFILE_DIR)
   : resolve(process.env.DSH_HOME || join(homedir(), 'AppData', 'Roaming', 'dsh-desktop', 'harness'), 'profiles', 'web');
@@ -55,6 +57,21 @@ function runPnpm() {
   });
 }
 
+async function repairLockIntegrity() {
+  let lockText = readFileSync(lockFile, 'utf8');
+  const match = CHANGE_MODEL_RE.exec(lockText);
+  if (!match || /\bintegrity:/i.test(match[2])) return false;
+  const tarball = /tarball:\s*(https:\/\/[^\s}]+)/i.exec(match[2])?.[1];
+  if (!tarball) return false;
+  const response = await fetch(tarball);
+  if (!response.ok) throw new Error(`cannot download changmodel tarball: HTTP ${response.status}`);
+  const integrity = `sha512-${createHash('sha512').update(Buffer.from(await response.arrayBuffer())).digest('base64')}`;
+  const resolution = `${match[2].trimEnd()}, integrity: ${integrity}}`;
+  lockText = lockText.slice(0, match.index) + match[1] + resolution + match[3] + lockText.slice(match.index + match[0].length);
+  writeFileSync(lockFile, lockText, 'utf8');
+  return true;
+}
+
 async function repair() {
   if (!existsSync(packageFile)) throw new Error(`profile package.json not found: ${packageFile}`);
   if (!existsSync(lockFile)) throw new Error(`profile pnpm-lock.yaml not found: ${lockFile}`);
@@ -72,7 +89,8 @@ async function repair() {
       writeFileSync(packageFile, JSON.stringify(packageJson, null, 2) + '\n', 'utf8');
     }
     const output = await runPnpm();
-    return { ...readState(), backup, output: output.slice(-4000) };
+    const integrityAdded = await repairLockIntegrity();
+    return { ...readState(), backup, integrityAdded, output: output.slice(-4000) };
   } catch (error) {
     return { ...readState(), backup, failed: true, error: error.message };
   }
