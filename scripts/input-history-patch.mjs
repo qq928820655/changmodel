@@ -43,7 +43,17 @@ function status() {
 
 function apply() {
   let source = readFileSync(target, 'utf8');
-  if (source.includes(marker)) return status();
+  if (source.includes(marker)) {
+    const updated = source.replace('if (!composing && empty && !machineBusy && !locked)', 'if (!composing && (empty || historyRef.current.cursor >= 0) && !machineBusy && !locked)');
+    if (updated !== source) {
+      const state = existsSync(stateFile) ? JSON.parse(readFileSync(stateFile, 'utf8')) : {};
+      if (state.patchedHash && state.patchedHash !== digest(source)) fail('target changed after the managed patch; restore the original or inspect manually before reapplying');
+      source = updated;
+      writeFileSync(target, source, 'utf8');
+      writeFileSync(stateFile, JSON.stringify({ ...state, patchedHash: digest(source) }, null, 2), 'utf8');
+    }
+    return status();
+  }
   const signature = 'function InputBar({ useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages,';
   const signatureAt = once(source, signature, 'InputBar signature');
   const historyProp = 'history, ';
@@ -61,7 +71,7 @@ function apply() {
 
   const arrowAnchor = 'if (keyboard.arbitrate(e.key === "ArrowUp" ? "up" : "down", composing) === "consumed") e.preventDefault();';
   const arrowAt = once(source, arrowAnchor, 'Composer arrow-key handling');
-  const arrowReplacement = `if (keyboard.arbitrate(e.key === "ArrowUp" ? "up" : "down", composing) === "consumed") {\n\t\t\t\t\t\t\te.preventDefault();\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tif (!composing && empty && !machineBusy && !locked) {\n\t\t\t\t\t\t\te.preventDefault();\n\t\t\t\t\t\t\tnavigateInputHistory(e.key === "ArrowUp" ? -1 : 1);\n\t\t\t\t\t\t}`;
+  const arrowReplacement = `if (keyboard.arbitrate(e.key === "ArrowUp" ? "up" : "down", composing) === "consumed") {\n\t\t\t\t\t\t\te.preventDefault();\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tif (!composing && (empty || historyRef.current.cursor >= 0) && !machineBusy && !locked) {\n\t\t\t\t\t\t\te.preventDefault();\n\t\t\t\t\t\t\tnavigateInputHistory(e.key === "ArrowUp" ? -1 : 1);\n\t\t\t\t\t\t}`;
   source = source.slice(0, arrowAt) + arrowReplacement + source.slice(arrowAt + arrowAnchor.length);
 
   const inertAnchor = 'draftImages: void 0,';
