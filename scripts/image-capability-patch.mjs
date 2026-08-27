@@ -37,12 +37,24 @@ const status = () => {
 };
 const apply = () => {
   let source = readFileSync(target, 'utf8');
-  if (source.includes(marker)) return status();
+  if (source.includes(marker)) {
+    const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : null;
+    if (state?.patchedHash && state.patchedHash !== hash(source)) throw new Error('target changed after the managed patch; restore the original or inspect manually before reapplying');
+    const old = "const settings = optionalService(ctx, 'settings');\n            const configured = settings?.get?.('llm-pi-ai')?.providers?.[route.provider]?.models?.find((model) => model?.id === route.model);";
+    const next = "const settings = ctx.reflect?.get?.('settings', false);\n            const llmSettings = settings?.get?.('llm-pi-ai');\n            const configured = llmSettings?.providers?.[route.provider]?.models?.find((model) => model?.id === route.model);";
+    if (source.includes(old)) {
+      source = source.replace(old, next);
+      writeFileSync(target, source, 'utf8');
+      writeFileSync(statePath, JSON.stringify({ ...state, patchedHash: hash(source) }, null, 2), 'utf8');
+    }
+    return status();
+  }
   const anchor = "const llm = optionalService(ctx, 'llm');";
   if (source.indexOf(anchor) < 0 || source.indexOf(anchor, source.indexOf(anchor) + anchor.length) >= 0) throw new Error('describe-image capability anchor is missing or ambiguous');
   const insert = `${marker}
-            const settings = optionalService(ctx, 'settings');
-            const configured = settings?.get?.('llm-pi-ai')?.providers?.[route.provider]?.models?.find((model) => model?.id === route.model);
+            const settings = ctx.reflect?.get?.('settings', false);
+            const llmSettings = settings?.get?.('llm-pi-ai');
+            const configured = llmSettings?.providers?.[route.provider]?.models?.find((model) => model?.id === route.model);
             if (Array.isArray(configured?.input)) return { acceptsImages: configured.input.includes('image'), known: true };`;
   source = source.replace(anchor, `${insert}
             ${anchor}`);
