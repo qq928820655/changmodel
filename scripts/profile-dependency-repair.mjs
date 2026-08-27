@@ -48,7 +48,7 @@ function runPnpm() {
   const executable = pnpmPath();
   if (!executable) throw new Error('cannot locate pnpm; set DSH_PNPM to the profile package manager');
   return new Promise((resolveRun, reject) => {
-    execFile(executable, ['install', '--lockfile-only', '--fix-lockfile', '--ignore-scripts'], { cwd: profile, windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (error, stdout, stderr) => {
+    execFile(executable, ['install', '--fix-lockfile', '--ignore-scripts'], { cwd: profile, windowsHide: true, shell: process.platform === 'win32', maxBuffer: 8 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) reject(new Error((stderr || stdout || error.message).trim()));
       else resolveRun((stdout || '').trim());
     });
@@ -64,6 +64,13 @@ async function repair() {
   copyFileSync(packageFile, join(backup, 'package.json'));
   copyFileSync(lockFile, join(backup, 'pnpm-lock.yaml'));
   try {
+    const packageJson = JSON.parse(readFileSync(packageFile, 'utf8'));
+    const spec = packageJson.dependencies?.changmodel;
+    const commit = typeof spec === 'string' ? spec.match(/(?:tar\.gz\/|#)([0-9a-f]{40})$/i)?.[1] : null;
+    if (commit && typeof spec === 'string' && /^git\+https:\/\/github\.com\/qq928820655\/changmodel\.git#/i.test(spec)) {
+      packageJson.dependencies.changmodel = `https://codeload.github.com/qq928820655/changmodel/tar.gz/${commit}`;
+      writeFileSync(packageFile, JSON.stringify(packageJson, null, 2) + '\n', 'utf8');
+    }
     const output = await runPnpm();
     return { ...readState(), backup, output: output.slice(-4000) };
   } catch (error) {
