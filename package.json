@@ -1,6 +1,6 @@
 {
     "name":  "changmodel",
-    "version":  "0.3.3",
+    "version":  "0.3.4",
     "description":  "模型切换、模型能力配置、固定摘要模型、子 agent 角色路由与输入历史增强。",
     "type":  "module",
     "main":  "lib/index.js",
