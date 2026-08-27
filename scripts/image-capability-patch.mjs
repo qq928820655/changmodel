@@ -40,12 +40,14 @@ const apply = () => {
   if (source.includes(marker)) {
     const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : null;
     if (state?.patchedHash && state.patchedHash !== hash(source)) throw new Error('target changed after the managed patch; restore the original or inspect manually before reapplying');
-    const old = "const settings = optionalService(ctx, 'settings');\n            const configured = settings?.get?.('llm-pi-ai')?.providers?.[route.provider]?.models?.find((model) => model?.id === route.model);";
+    const oldPattern = /const settings = optionalService\(ctx, ['\"]settings['\"]\);\s*const configured = settings\?\.get\?\.\(['\"]llm-pi-ai['\"]\)\?\.providers\?\.\[route\.provider\]\?\.models\?\.find\(\(model\) => model\?\.id === route\.model\);/;
     const next = "const settings = ctx.reflect?.get?.('settings', false);\n            const llmSettings = settings?.get?.('llm-pi-ai');\n            const configured = llmSettings?.providers?.[route.provider]?.models?.find((model) => model?.id === route.model);";
-    if (source.includes(old)) {
-      source = source.replace(old, next);
+    if (oldPattern.test(source)) {
+      source = source.replace(oldPattern, next);
       writeFileSync(target, source, 'utf8');
       writeFileSync(statePath, JSON.stringify({ ...state, patchedHash: hash(source) }, null, 2), 'utf8');
+    } else if (!source.includes("const settings = ctx.reflect?.get?.('settings', false);")) {
+      throw new Error('managed image capability patch is outdated; restore the original or inspect manually before reapplying');
     }
     return status();
   }
